@@ -1,0 +1,155 @@
+#
+# Copyright (c) 2023 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+source "Kconfig.zephyr"
+
+menu "Programme proncipale"
+
+config CONNECTION_IDLE_TIMEOUT
+	int "Time to be waited for a station to connect"
+	default 30
+
+config WIFI_SSID
+	string "WIFI AP"
+	help
+	  Specify the SSID to connect
+
+choice  WIFI_KEY_MGMT_SELECT
+	prompt "Security Option"
+	default WIFI_KEY_MGMT_WPA2
+
+config WIFI_KEY_MGMT_NONE
+	bool "Open Security"
+	help
+	  Enable for Open Security
+
+config WIFI_KEY_MGMT_WPA2
+	bool "WPA2 Security"
+	help
+	  Enable for WPA2 Security
+
+config WIFI_KEY_MGMT_WPA2_256
+	bool "WPA2 SHA 256 Security"
+	help
+	  Enable for WPA2-PSK-256 Security
+
+config WIFI_KEY_MGMT_WPA3
+	bool "WPA3 Security"
+	help
+	  Enable for WPA3 Security
+endchoice
+
+config WIFI_PASSWORD
+	string "3vjd-tgyt-fm22-6sur"
+	help
+	  Specify the Password to connect
+
+config STA_CONN_TIMEOUT_SEC
+	int "Overall Connection timeout (time to be waited for a station to connect and get an IP address)"
+	# Zephyr DHCP retry is 1 minute, so set the default to 70 seconds
+	default 70
+	# 512 has no special meaning, just a reasonable upper limit
+	range 0 512
+	help
+	  Specify the connection timeout, in seconds. This is the overall timeout (time to be waited for
+	  a station to connect and get an IP address). DHCP retries should be taken into account when setting
+	  this value. If the timeout is set to 0, the connection will not timeout.
+
+config TWT_TRIGGER_ENABLE
+	bool "Enable trigger mode"
+	help
+	  STA expects AP to send triggers for start of every service period.
+
+config TWT_ANNOUNCED_MODE
+	bool "Enable announced mode"
+	help
+	  STA announces its wakeup to AP for every service period start.
+
+config TWT_WAKE_INTERVAL
+	int "TWT awake interval"
+	help
+	  The period where STA is awake and does data transfer, interval should be in us.
+	default 65000
+
+config TWT_INTERVAL
+	int "TWT service interval"
+	help
+	  The period for TWT that includes both wake and sleep durations, interval should be in us.
+	  Please note higher intervals can be rejected by AP or cause interoperability issues.
+	default 524000
+
+choice TWT_TRAFFIC_PATTERN
+	prompt "Specifies the TWT traffic pattern either continuous tx or scheduled tx"
+	default CONTINUOUS_TX
+
+config CONTINUOUS_TX
+	bool "Send traffic continuously"
+	help
+	  Send traffic continuously without any restrictions, irrespective of sleep and awake periods.
+
+config SCHEDULED_TX
+	bool "Send traffic based on TWT schedule"
+	help
+	  Send traffic based on the TWT schedule and only transmits during the awake periods.
+
+endchoice
+
+config TCP_SERVER_IP
+	string "IPv4 address of the TCP server"
+	help
+	  Specify the IPv4 address of the TCP server
+	default "0.0.0.0"
+
+config TCP_SERVER_PORT
+	int "Server port"
+	help
+	  Specify the server port
+	default 2000
+
+config DEVICE_MAJOR_VERSION
+	int "Device major version"
+	help
+	  Specify the device major version
+	default 0
+
+config DEVICE_MINOR_VERSION
+	int "Device minor version"
+	help
+	  Specify the device minor version
+	default 1
+
+choice DEVICE_TYPE
+	prompt "Device type"
+	default DEVICE_TYPE_DEVKIT
+
+config DEVICE_TYPE_DEVKIT
+	bool "Development kit"
+	help
+	  Specify the device type is the devkit device
+
+config DEVICE_TYPE_READER_HW_V1
+	bool "Reader hardware version 1"
+	help
+	  Specify the device type is the reader hardware version 1
+
+config DEVICE_TYPE_READER_HW_V2
+	bool "Reader hardware version 2"
+	help
+	  Specify the device type is the reader hardware version 2
+
+config DEVICE_TYPE_UNKNOWN
+	bool "Unknown device type, please specify in the code"
+	help
+	  Specify the device type is unknown
+
+config DEVICE_TYPE_CUSTOM
+	bool "Custom device type, please specify in the code"
+	help
+	  Specify the device type is custom
+
+endchoice
+
+endmenu
