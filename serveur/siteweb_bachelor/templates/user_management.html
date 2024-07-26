@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Site User Management</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 15px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <ul>
+            <li><a href="user_management">User Management Site</a></li>
+            <li><a href="user_management2">User Management Access</a></li>
+        </ul>
+    </nav>
+    <h1>Site User Management</h1>
+    <form action="{{ url_for('add_user_site') }}" method="post">
+        <label for="username">Username:</label>
+        <input type="text" name="username" required><br>
+        <label for="password">Password</label>
+        <input type="text" name="password" required><br>
+        <input type="submit" value="Add User site">
+    </form>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Password</th>
+        </tr>
+        {% for user in users %}
+        <tr>
+            <td>{{ user[0] }}</td>
+            <td>{{ user[1] }}</td>
+            <td>{{ user[2] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>

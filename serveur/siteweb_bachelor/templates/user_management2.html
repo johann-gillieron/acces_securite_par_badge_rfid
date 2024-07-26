@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Access User Management</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 15px;
+        }
+        </style>
+</head>
+<body>
+    <nav class="navbar">
+        <ul>
+            <li><a href="user_management">User Management Site</a></li>
+            <li><a href="user_management2">User Management Access</a></li>
+        </ul>
+    </nav>
+    <h1>Access User Management</h1>
+    <form action="{{ url_for('add_user') }}" method="post">
+        <label for="first_name">First Name:</label>
+        <input type="text" name="first_name" required><br>
+        <label for="last_name">Last Name:</label>
+        <input type="text" name="last_name" required><br>
+        <label for="phone">Phone number:</label>
+        <input type="text" name="phone" required><br>
+        <div class="form-group">
+            <label for="hexInput">Entrez une valeur hexadécimale (XX:XX:XX:XX:XX:XX:XX:XX):</label>
+            <input type="text" id="hexInput" name="secret" pattern="^([0-9A-Fa-f]{2}:){7}[0-9A-Fa-f]{2}$" required>
+            <div class="error" id="errorMessage"></div>
+        </div>
+        <label for="technician">Technician:</label>
+        <input type="checkbox" name="technician"><br>
+        <label for="machine_1">Access Machine 1:</label>
+        <input type="checkbox" name="machine_1"><br>
+        <label for="machine_2">Access Machine 2:</label>
+        <input type="checkbox" name="machine_2"><br>
+        <input type="submit" value="Add User">
+    </form>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>User ID</th>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Phone</th>
+            <th>Secret</th>
+            <th>Machine 1</th>
+            <th>Machine 2</th>
+            <th>Machine 3</th>
+            <th></th>
+        </tr>
+        {% for user in users %}
+        <tr>
+            <td>{{ user[0] }}</td>
+            <td>{{ user[1] }}</td>
+            <td>{{ user[2] }}</td>
+            <td>{{ user[3] }}</td>
+            <td>{{ user[4] }}</td>
+            <td>{{ user[5] }}</td>
+            <td>{{ user[6] }}</td>
+            <td>{{ user[7] }}</td>
+            <td>{{ user[8] }}</td>
+            <td>
+                <form action="{{ url_for('delete_user', user_id=user[0]) }}" method="post">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <input type="submit" value="Delete">
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <script>
+        document.getElementById('hexForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const hexInput = document.getElementById('hexInput').value;
+            const errorMessage = document.getElementById('errorMessage');
+
+            if (!/^([0-9A-Fa-f]{2}:){7}[0-9A-Fa-f]{2}$/.test(hexInput)) {
+                errorMessage.textContent = 'Veuillez entrer une valeur hexadécimale valide au format XX:XX:XX:XX:XX:XX:XX:XX.';
+            } else {
+                errorMessage.textContent = '';
+                alert('Valeur hexadécimale soumise avec succès: ' + hexInput);
+            }
+        });
+    </script>
+</body>
+</html>
