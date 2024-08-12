@@ -181,7 +181,7 @@ void create_interface(lv_obj_t * parent) {
     // Create a label for the sleep info
     label_subtitle = lv_label_create(parent);
     lv_obj_add_style(label_subtitle, small_font_pointer, LV_PART_MAIN);
-    lv_label_set_text_static(label_subtitle, "          Le système est en veille\nPasser un badge pour l'activer");
+    lv_label_set_text_static(label_subtitle, "              Le système est en veille\nAppuyer sur un bouton pour activer");
     lv_obj_align(label_subtitle, LV_ALIGN_CENTER, 0, 20);
     
     /****** Wait screen (Only a title in center) ******/
@@ -258,7 +258,7 @@ void create_interface(lv_obj_t * parent) {
 void refresh_info_display(uint8_t state, uint64_t time_remaining, bool technical_user, SessionContext_t *session_context) {
     char my_text[40]; // buffer to hold the text
     // Hide all the labels 
-    LOG_INF("Refreshing the display");
+    LOG_DBG("Refreshing the display");
     lv_obj_add_flag(label_title_center, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(label_title_high, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(label_subtitle, LV_OBJ_FLAG_HIDDEN);
@@ -303,15 +303,16 @@ void refresh_info_display(uint8_t state, uint64_t time_remaining, bool technical
             my_text[16] = '\0'; // add the end of string
             lv_label_set_text_fmt(label_Phone, "Téléphone:\n%s", my_text);
             lv_obj_clear_flag(label_TimeRemaining, LV_OBJ_FLAG_HIDDEN);
-            lv_label_set_text_fmt(label_TimeRemaining, "Temps restant(hh:mm): %02d:%02d", (uint32_t)(time_remaining / 3600000), (uint32_t)(time_remaining/60000) % 60);
             lv_obj_clear_flag(label_lock_status, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(label_btn_right_up, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(label_btn_right_down, LV_OBJ_FLAG_HIDDEN);
             lv_label_set_text(label_lock_status, LV_SYMBOL_PLAY);
             if(technical_user) {
-                lv_label_set_text(label_btn_right_up, LV_SYMBOL_EYE_CLOSE);
-                lv_label_set_text(label_btn_right_down, LV_SYMBOL_EYE_OPEN);
+            lv_label_set_text_fmt(label_TimeRemaining, "Mode de Maintenance");
+                lv_label_set_text(label_btn_right_up, LV_SYMBOL_EYE_OPEN);
+                lv_label_set_text(label_btn_right_down, LV_SYMBOL_EYE_CLOSE);
             } else {
+            lv_label_set_text_fmt(label_TimeRemaining, "Temps restant(hh:mm): %02d:%02d", (uint32_t)(time_remaining / 3600000), (uint32_t)(time_remaining/60000) % 60);
                 lv_label_set_text(label_btn_right_up, LV_SYMBOL_PLUS);
                 lv_label_set_text(label_btn_right_down, LV_SYMBOL_MINUS);
             }
@@ -341,7 +342,7 @@ void refresh_info_display(uint8_t state, uint64_t time_remaining, bool technical
     }
 	
 	lv_task_handler(); // Handle the LVGL tasks
-    LOG_INF("Display refreshed");
+    LOG_DBG("Display refreshed");
 }
 
 /*! authentication_process
@@ -356,7 +357,7 @@ int authentication_process(SessionContext_t *session_context, uint8_t state) {
     user.user_name_size = 17;
     // chech the NFC card
     nfc_rf_field_control(clrc663, true); // Enable RF field
-    k_sleep(K_MSEC(300)); // Wait for the nf field to be enabled
+    k_sleep(K_MSEC(300)); // Wait for the nf field to be enabled and stable
     ret = read_card_secret(DESFire_ID);
     LOG_HEXDUMP_INF(DESFire_ID, 8, "DESFire ID : ");
     nfc_rf_field_control(clrc663, false); // Disable RF field
@@ -374,12 +375,15 @@ int authentication_process(SessionContext_t *session_context, uint8_t state) {
             case USER_INTERFACE_AUTHENTICATION:
                 session_context->user_id = user.user_id_number;
                 session_context->user_type = user.user_type;
-                session_context->user_name_size = MIN(user.user_name_size, 20);
+                session_context->user_name_size = MIN(user.user_name_size + 1, 25);
                 bytecpy(session_context->user_name, user.user_name, session_context->user_name_size);
                 bytecpy(session_context->phone_number, user.phone_number, 16);
                 bytecpy(session_context->desfire_id, user.desfire_id, 8);
                 ret = 1;
                 break;
+            
+            case USER_INTERFACE_MAINTENANCE_LOCK:
+                // direct access to the maintenance user
             
             case USER_INTERFACE_SESSION_SLEEP:
                 if(session_context->user_id == user.user_id_number) { // Check if the user is the same as the actual session
@@ -396,9 +400,14 @@ int authentication_process(SessionContext_t *session_context, uint8_t state) {
                     ret = 1;
                 }
                 break;
+
+            default:
+                ret = 0;
+                LOG_WRN("State not found");
+                break;
         }
     } else {
-        LOG_INF("User not found");
+        LOG_WRN("User not found");
     }
    return ret;
 }
@@ -420,6 +429,10 @@ void add_new_log(SessionContext_t *session_context, uint8_t state) {
             new_log.log_type = LOG_ACTION_ACTIVATE;
             break;
 
+        case USER_INTERFACE_SESSION_SLEEP:
+            new_log.log_type = LOG_ACTION_SLEEP;
+            break;
+
         case USER_INTERFACE_SESSION_END:
             new_log.log_type = LOG_ACTION_DISABLE;
             break;
@@ -429,8 +442,7 @@ void add_new_log(SessionContext_t *session_context, uint8_t state) {
             break;
         
         default:
-            state = LOG_ACTION_UNKNOWN;
-            break;
+            return;
     }
     // Add the log in the log queue
     k_msgq_put(&logs_add_queue, &new_log, K_NO_WAIT);
@@ -567,8 +579,9 @@ void userInterface_thread(void)
 
             case USER_INTERFACE_AUTHENTICATION:
                 LOG_INF("USER_INTERFACE_AUTHENTICATION");
-                add_new_log(&local_session_context, USER_INTERFACE_AUTHENTICATION);
+                //add_new_log(&local_session_context, USER_INTERFACE_AUTHENTICATION);
                 if(authentication_process(&local_session_context, actual_state) > 0) {
+                    technical_user = (local_session_context.user_type == 1);
                     actual_state = USER_INTERFACE_ACCESS_GRANTED;
                 } else {
                     actual_state = USER_INTERFACE_ACCESS_DENIED;
@@ -582,7 +595,7 @@ void userInterface_thread(void)
 
             case USER_INTERFACE_ACCESS_GRANTED:
                 LOG_INF("USER_INTERFACE_ACCESS_GRANTED");
-                add_new_log(&local_session_context, USER_INTERFACE_ACCESS_GRANTED);
+                //add_new_log(&local_session_context, USER_INTERFACE_ACCESS_GRANTED);
                 gpio_pin_set_dt(&led, true); // Turn on the device
                 actual_state = USER_INTERFACE_SESSION_ACTIF;
                 if (technical_user) {
@@ -597,14 +610,20 @@ void userInterface_thread(void)
                 LOG_INF("USER_INTERFACE_SESSION_ACTIF");
                 if (k_uptime_get() > Next_screen_lock) {
                     LOG_INF("Screen lock");
-                    actual_state = USER_INTERFACE_SESSION_SLEEP;
+                    if (technical_user) {
+                        actual_state = USER_INTERFACE_MAINTENANCE_LOCK;
+                    } else {
+                        actual_state = USER_INTERFACE_SESSION_SLEEP;
+                    }
                     break;
                 }
+
                 if (time_remaining == 0) {
                     LOG_INF("Time remaining 0");
                     actual_state = USER_INTERFACE_SESSION_END;
                     break;
                 }
+
                 if (flag_btn) {
                     update_display = true;
                     Next_screen_lock = now + SCREEN_LOCK_TIME * 1000;
@@ -616,18 +635,23 @@ void userInterface_thread(void)
 
                         // lock interface
                         k_sleep(K_SECONDS(2));
+
                         // Hold of boutons
                         if((gpio_pin_get_dt(&button0) | gpio_pin_get_dt(&button1))) {
                             LOG_INF("Both buttons hold, %d, %d", gpio_pin_get_dt(&button0), gpio_pin_get_dt(&button1));
                             technical_user = 0;
                             time_remaining = 0;
                             actual_state = USER_INTERFACE_SESSION_END;
-                        }
-                        else
-                        {
-                            actual_state = USER_INTERFACE_SESSION_SLEEP;
+                            break;
+                        } else {
+                            if (technical_user) {
+                                actual_state = USER_INTERFACE_MAINTENANCE_LOCK;
+                            } else {
+                                actual_state = USER_INTERFACE_SESSION_SLEEP;
+                            }
                         }
                     }
+
                     if (technical_user) {
                         while(k_msgq_get(&add_queue, &btn, K_NO_WAIT) == 0) {
                             time_remaining = TIME_MAX_SESSION * 1000;
@@ -635,6 +659,7 @@ void userInterface_thread(void)
 
                         while(k_msgq_get(&minus_queue, &btn, K_NO_WAIT) == 0) {
                             time_remaining = 0;
+                            actual_state = USER_INTERFACE_SESSION_END;
                         }
                     } else {
                         while(k_msgq_get(&add_queue, &btn, K_NO_WAIT) == 0) {
@@ -661,14 +686,15 @@ void userInterface_thread(void)
                 if (time_remaining == 0) {
                     actual_state = USER_INTERFACE_SESSION_END;
                 }
+
                 if (flag_btn) {
                     if(authentication_process(&local_session_context, actual_state) > 1) { // check if the user is the same user or a maintenance user
                         Next_screen_lock = now + SCREEN_LOCK_TIME * 1000;
                         actual_state = USER_INTERFACE_SESSION_ACTIF;
                         // clear the queues
-                        while(k_msgq_get(&add_queue, &btn, K_NO_WAIT) == 0) {}
-                        while(k_msgq_get(&minus_queue, &btn, K_NO_WAIT) == 0) {}
-                        while(k_msgq_get(&both_queue, &btn, K_NO_WAIT) == 0) {}
+                        k_msgq_purge(&add_queue);
+                        k_msgq_purge(&minus_queue);
+                        k_msgq_purge(&both_queue);
                     }
                     flag_btn = false;
                 }
@@ -676,27 +702,27 @@ void userInterface_thread(void)
                 break;
 
             case USER_INTERFACE_SESSION_END:
-                add_new_log(&local_session_context, USER_INTERFACE_SESSION_END);
+                //add_new_log(&local_session_context, USER_INTERFACE_SESSION_END);
                 actual_state = USER_INTERFACE_SLEEP;
                 LOG_INF("USER_INTERFACE_SESSION_END");
                 time_remaining = 0;
                 break;
 
             case USER_INTERFACE_MAINTENANCE_LOCK:
-                add_new_log(&local_session_context, USER_INTERFACE_MAINTENANCE_LOCK);
                 LOG_INF("USER_INTERFACE_MAINTENANCE_LOCK");
                 if (flag_btn) {
-                    LOG_INF("Both buttons pressed");
-                    // clear the queue
+                    LOG_INF("Button pressed => Authentication");
                     if(authentication_process(&local_session_context, actual_state) > 1) { // check if the user is the same user or a maintenance user
-                        Next_screen_lock = now + SCREEN_LOCK_TIME * 1000;
+                        LOG_INF("Authentication : Acces granted");
+                        Next_screen_lock = k_uptime_get() + SCREEN_LOCK_TIME * 1000;
                         actual_state = USER_INTERFACE_SESSION_ACTIF;
                         // clear the queues
-                        while(k_msgq_get(&add_queue, &btn, K_NO_WAIT) == 0) {}
-                        while(k_msgq_get(&minus_queue, &btn, K_NO_WAIT) == 0) {}
-                        while(k_msgq_get(&both_queue, &btn, K_NO_WAIT) == 0) {}
+                        k_msgq_purge(&add_queue);
+                        k_msgq_purge(&minus_queue);
+                        k_msgq_purge(&both_queue);
+                    } else {
+                        LOG_INF("Authentication : Acces denied");
                     }
-                    actual_state = USER_INTERFACE_SESSION_ACTIF;
                     flag_btn = false;
                 }
                 break;
@@ -708,6 +734,7 @@ void userInterface_thread(void)
         // Update the display
         if(actual_state != old_state || update_display) {
             refresh_info_display(actual_state, time_remaining, technical_user, &local_session_context);
+            add_new_log(&local_session_context, actual_state);
             old_state = actual_state;
             update_display = false;
         }
