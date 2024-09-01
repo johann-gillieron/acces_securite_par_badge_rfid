@@ -294,11 +294,11 @@ static int flash_write_user_id(UserID_t *user_data, uint16_t user_no, uint8_t fl
 
     if(flag_last_user)
     {
-        if(addr_start_offset == 0)
+        if(addr_start_offset == 0) // Need to erase the sector to write the new user data if it is the first user of the sector
         {
             ret = flash_erase(flash_dev, addr, SPI_FLASH_SECTOR_SIZE);
             if (ret != 0) {
-                LOG_ERR("Failed to erase user data from flash! %d", ret);
+                LOG_ERR("flash_write_user_id : Failed to erase user data from flash! %d", ret);
                 return ret;
             }
         }
@@ -314,7 +314,7 @@ static int flash_write_user_id(UserID_t *user_data, uint16_t user_no, uint8_t fl
         // Read the sector to keep the other
         ret = flash_read(flash_dev, addr_sector, data_buf, SPI_FLASH_SECTOR_SIZE);
         if (ret != 0) {
-            LOG_ERR("Failed to read user data from flash! %d", ret);
+            LOG_ERR("flash_write_user_id : Failed to read user data from flash! %d", ret);
             return ret;
         }
 
@@ -324,7 +324,7 @@ static int flash_write_user_id(UserID_t *user_data, uint16_t user_no, uint8_t fl
         // Need to erase the first sector to write the new user data
         ret = flash_erase(flash_dev, addr_sector, SPI_FLASH_SECTOR_SIZE);
         if (ret != 0) {
-            LOG_ERR("Failed to erase user data from flash! %d", ret);
+            LOG_ERR("flash_write_user_id : Failed to erase user data from flash! %d", ret);
             return ret;
         }
 
@@ -348,11 +348,31 @@ static int flash_write_user_id(UserID_t *user_data, uint16_t user_no, uint8_t fl
 static int flash_delete_last_user(uint16_t user_no)
 {
     int ret;
-    off_t addr = FLASH_MEM_USER_DATA_START_ADDR + SPI_FLASH_SECTOR_SIZE + user_no * sizeof(UserID_t);
-    ret = flash_erase(flash_dev, addr, SPI_FLASH_SECTOR_SIZE);
+	off_t addr = FLASH_MEM_USER_DATA_START_ADDR + SPI_FLASH_SECTOR_SIZE + user_no * sizeof(UserID_t);
+	off_t addr_start_offset = (addr % SPI_FLASH_SECTOR_SIZE);
+	off_t addr_sector = addr - addr_start_offset; // Get the sector start address
+    int nb_other_users_in_sector = user_no % (SPI_FLASH_SECTOR_SIZE / sizeof(UserID_t));
+    LOG_INF("Number of other users in the sector (without the last user): %d", nb_other_users_in_sector);
+
+    // read the sector to keep the other
+    char data_buf[SPI_FLASH_SECTOR_SIZE];
+    ret = flash_read(flash_dev, addr_sector, data_buf, nb_other_users_in_sector * sizeof(UserID_t));
     if (ret != 0) {
-        LOG_ERR("Failed to erase user data from flash! %d", ret);
+        LOG_ERR("flash_delete_last_user : Failed to read user data from flash! %d", ret);
         return ret;
+    }
+
+    // Need to erase all the sector to rewrite the other users
+    ret = flash_erase(flash_dev, addr_sector, SPI_FLASH_SECTOR_SIZE);
+    if (ret != 0) {
+        LOG_ERR("flash_delete_last_user : Failed to erase user data from flash! %d", ret);
+        return ret;
+    }
+
+    // Write the sector with the other users
+    ret = flash_write(flash_dev, addr_sector, data_buf, nb_other_users_in_sector * sizeof(UserID_t));
+    if (ret != 0) {
+        LOG_ERR("Failed to write user data to flash! %d", ret);
     }
     return ret;
 }
@@ -523,9 +543,10 @@ static int users_remove_user(uint16_t user_id, uint16_t *nb_users)
     {
         LOG_ERR("Error while searching for the user to remove! %d\n", ret);
         return ret;
-    } else if (ret == 0)
+    } 
+    else if (ret == 0)
     {
-        LOG_WRN("User not found!");
+        LOG_WRN("User not found! %d\n", user_id);
         return 0;
     }
 
