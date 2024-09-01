@@ -1,7 +1,7 @@
 # Project: Serveur pour acces sécurité par badge RFID
 # Description: Serveur TCP pour la gestion des utilisateurs et des logs
 # Author: Johann Gilliéron
-# Date: 2024.07.20
+# Date: 2024.09.01
 import socket, os
 import threading
 import datetime, time
@@ -10,13 +10,13 @@ import csv
 import mariadb
 
 # define the global constants
+logs_folder = "siteweb_bachelor/logs/"
 DEBUG_LVL0 = False # Debug level 0: critical information
 DEBUG_LVL1 = True # Debug level 1: information
 DEBUG_LVL2 = True # Debug level 2: debug information
 TCP_PORT = 3000
 TCP_IP_ADDRESS = "0.0.0.0"  # Listen on all available network interfaces
 start_text = b"I'm the Server and the first mater. Hello there!"
-tech_test= "Dans le cadre de mon travail de Bachelor à la Haute École d'Ingénierie et de Gestion du canton de Vaud (HEIG-VD), j'ai eu l'opportunité de travailler sur un projet passionnant lié à l'Internet des Objets (IoT) et plus particulièrement à la technologie Bluetooth Low Energy (BLE). Mon objectif était de développer une application mobile capable de communiquer avec des capteurs BLE afin de collecter des données en temps réel et de les afficher sur une interface graphique conviviale. Pour cela, j'ai utilisé le langage de programmation C# avec l'environnement de développement intégré (IDE) Visual Studio Code (VS Code) et la bibliothèque open-source LVGL (Light and Versatile Graphics Library) pour la création de l'interface graphique. J'ai également utilisé le protocole de communication série Universal Asynchronous Receiver-Transmitter (UART) pour communiquer avec les capteurs BLE. Après plusieurs semaines de développement et de tests, j'ai finalement réussi à créer une application mobile fonctionnelle et efficace, capable de collecter et d'afficher les données des capteurs BLE en temps réel. Cette expérience m'a permis d'acquérir de nouvelles compétences en programmation et en développement d'applications mobiles, ainsi que de renforcer mes connaissances en matière d'IoT et de BLE.".encode('utf-8')
 BYTE_MTU_MAX = 1500
 TIMEOUT = 60 # 60 seconds
 BYTES_FOR_DEVICE_INFO = 7
@@ -126,6 +126,8 @@ def UserData(user_id, user_first_name, user_name, phone_number, desfire_id, user
 
 
 def DataBaseUserManagement():
+    users_in_db = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
+    actual_users = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
     db = connect_to_db()
     cursor = db.cursor()
     users = get_users_by_machine(cursor)
@@ -145,13 +147,13 @@ def DataBaseUserManagement():
 
 # Define a function to compute the logs receive from the device out : (user id, date, time, action)
 def logs_buffer_compute(buffer_logs, logs_size, device_id):
-    filename = "logs_device_" + str(device_id) + ".csv"
+    filename = logs_folder + "logs_device_" + str(device_id) + ".csv"
     logs = []
     nb_logs = int(logs_size / BYTES_PER_LOGS)
     for i in range(nb_logs):
         offset = i * BYTES_PER_LOGS
-        time = struct.unpack('>I', buffer_logs[offset:offset+4])
-        user_id = struct.unpack('>H', buffer_logs[offset+4:offset+2])
+        user_id = struct.unpack('<H', buffer_logs[offset:offset+2])
+        time = struct.unpack('<I', buffer_logs[offset+2:offset+6])
         match buffer_logs[offset+6]:
             case LogActionEnum.LOG_ACTION_ACTIVATE:
                 action = "Activate"
@@ -185,11 +187,13 @@ def logs_buffer_compute(buffer_logs, logs_size, device_id):
         # si le fichier n'existe pas, ajouter l'en-tête
         if not file_exists:
             writer.writerow(header_logs_csv)
+
         # ajouter les données
         for row in logs:
             writer.writerow(row)
-    return logs
 
+    return logs
+    
 
 def print_debug_log(text):
     now = datetime.datetime.now()
@@ -280,11 +284,11 @@ def TCP_send_function(client_connection, data_type, data=b'\x00'):
 def TCP_receive_function(client_connection, User_to_add = [], User_to_remove = [], device_id=0, client_address=""):
     data_option = 0
     try:
-        type_data = client_connection.recv(3)
+        type_data = client_connection.recv(1)
     except socket.timeout:
         print_debug_log("Error: Timeout - Retry to receive data")  
         try:
-            type_data = client_connection.recv(3)
+            type_data = client_connection.recv(1)
         except:
             print_debug_log("Error: - Communication disconnection")
             return [-1, data_option]
@@ -300,10 +304,7 @@ def TCP_receive_function(client_connection, User_to_add = [], User_to_remove = [
             return_value = TCP_DATA_TYPE.UNKNOWN
 
         case TCP_DATA_TYPE.LOG_DATA:
-            if len(type_data) == 3:
-               buf = type_data[1:3] 
-            else:
-                buf = client_connection.recv(2)
+            buf = client_connection.recv(2)
             buf = buf.replace(b' ', b'')
             print_debug_log(f"Nb bytes log: {buf}")
             try:
@@ -353,12 +354,7 @@ def TCP_receive_function(client_connection, User_to_add = [], User_to_remove = [
             return_value = TCP_DATA_TYPE.TIME_SYNC
 
         case TCP_DATA_TYPE.DEVICE_CONFIG:
-            if len(type_data) == 3:
-                type_data[1:3]
-                buf_1 = client_connection.recv(BYTES_FOR_DEVICE_INFO - 2)
-                buf = type_data[1:3] + buf_1
-            else:
-                buf = client_connection.recv(BYTES_FOR_DEVICE_INFO)
+            buf = client_connection.recv(BYTES_FOR_DEVICE_INFO)
             if DEBUG_LVL1:
                 print_debug_log("Device config received")
             if not buf:

@@ -34,11 +34,12 @@ LOG_MODULE_REGISTER(wifi, CONFIG_LOG_DEFAULT_LEVEL);
 #include "wifi.h"
 #include "tcp.h"
 
-#define TWT_USE true
-
 /*********************************
  *	 	Defines declarations     *
  ********************************/
+// Setting to enable or disable the TWT feature
+#define TWT_USE true
+
 #define WIFI_SHELL_MODULE "wifi"
 #define WIFI_SHELL_MGMT_EVENTS (NET_EVENT_WIFI_CONNECT_RESULT |		\
 				NET_EVENT_WIFI_DISCONNECT_RESULT|	\
@@ -519,12 +520,14 @@ begin_communication:
 				comm_context.server_connected = false;
 				goto server_connect;
 			}
-
+			
+#if TWT_USE
 			ret = teardown_twt(); // stop the TWT flow
 			if (ret) {
 				LOG_ERR("Failed to teardown TWT flow: %d\n", ret);
 				goto wifi_begin;
 			}
+#endif /* TWT_USE */
 
 			LOG_INF("Update pending, exiting\n");
 // TODO: Implement the update process

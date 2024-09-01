@@ -688,6 +688,7 @@ void memoryManagement_thread()
         {
             if (last_log_sent != logs_idx)
             {
+                LOG_INF("No last log send!");
                 LOG_INF("Last log sent: %d", last_log_sent);
                 LOG_INF("Logs index: %d", logs_idx);
                 while(last_log_sent != logs_idx)
@@ -744,8 +745,8 @@ void memoryManagement_thread()
                 }
                 else
                 {
-                    last_log_sent = logs_idx;
                     logs_idx++;
+                    last_log_sent = logs_idx;
                     ret = flash_write_logs_data(logs_idx, last_log_sent);
                     if (ret != 0)
                     {

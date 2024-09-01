@@ -53,12 +53,12 @@ static struct k_thread userInterfaceThread;
 
 /*
  * The led0 devicetree alias is optional. If present, we'll use it
- * to turn on the LED whenever the button is pressed.
+ * to turn on and off the action in physical world.
  */
-static struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
+static struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0}); // it's the pin p1.06 on the nRF7002 DK
 
-static const struct gpio_dt_spec button0 = GPIO_DT_SPEC_GET_OR(SW0_NODE, gpios,{0});
-static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(SW1_NODE, gpios,{0});
+static const struct gpio_dt_spec button0 = GPIO_DT_SPEC_GET_OR(SW0_NODE, gpios,{0}); // it's the pin p1.08 on the nRF7002 DK
+static const struct gpio_dt_spec button1 = GPIO_DT_SPEC_GET_OR(SW1_NODE, gpios,{0}); // it's the pin p1.09 on the nRF7002 DK
 static struct gpio_callback button0_cb_data;
 static struct gpio_callback button1_cb_data;
 static bool flag_btn = false;
@@ -703,6 +703,7 @@ void userInterface_thread(void)
 
             case USER_INTERFACE_SESSION_END:
                 //add_new_log(&local_session_context, USER_INTERFACE_SESSION_END);
+                gpio_pin_set_dt(&led, false); // Turn off the device
                 actual_state = USER_INTERFACE_SLEEP;
                 LOG_INF("USER_INTERFACE_SESSION_END");
                 time_remaining = 0;

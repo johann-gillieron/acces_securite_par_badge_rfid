@@ -33,6 +33,8 @@ LOG_MODULE_REGISTER(tcp, CONFIG_LOG_DEFAULT_LEVEL);
 #include "users.h"
 #include "logs.h"
 
+// Setting to enable or disable the TWT feature
+#define TWT_USE true
 #define TCP_SLEEP_TIME_MS 1000
 #define TWT_AWAKE_TIME_MS (uint32_t)(CONFIG_TWT_WAKE_INTERVAL / 1000)
 #define TWT_INTERVAL_TIME_MS (uint32_t)(CONFIG_TWT_INTERVAL / 1000)
@@ -618,7 +620,7 @@ int communication_loop(TcpContext_t *context)
 				return 1;
 			}
 				
-			// Update the device configuration only 1 per hour
+			// Update the device configuration only once per hour
 			if ((k_uptime_get() - last_device_config_sync) > 3600000)// 1 hour
 			{
 				ret = send_config_info_to_server(context, &device_config);
@@ -640,7 +642,7 @@ int communication_loop(TcpContext_t *context)
 				last_device_config_sync = k_uptime_get();
 			}
 				
-			// Update the device time only 1 per 12 hours
+			// Update the device time only once per 12 hours
 			if ((k_uptime_get() - last_time_sync) > 432000000)// 12 hour
 			{
 				ret = time_sync(context);
@@ -658,11 +660,16 @@ int communication_loop(TcpContext_t *context)
 			}
 
 			k_sleep(K_MSEC(TCP_SLEEP_TIME_MS)); // TCP_SLEEP_TIME_MS to avoid blocking the CPU for too long
+#if TWT_USE == false
+			context->pause_traffic = true; // Pause the traffic
+#endif
 		} else {
 			// Load the logs from the queue
         	while (k_msgq_get(&logs_send_queue, &log, K_NO_WAIT) == 0)
 			{
 				LOG_INF("Log received from queue");
+
+				// Check if the log buffer is full
 				if ((context->buffer_logs_len + sizeof(log)) >= CONFIG_NET_BUF_DATA_SIZE - 56) // 56 bytes for the header IP, TCP, etc.
 				{
 					LOG_ERR("Buffer full, sending logs to the server");
@@ -682,6 +689,10 @@ int communication_loop(TcpContext_t *context)
 			
 			}
 			k_sleep(K_MSEC(60));
+			
+#if TWT_USE == false
+			context->pause_traffic = false; // Resume the traffic
+#endif
 		}
 		if (!(context->server_connected))
 		{
