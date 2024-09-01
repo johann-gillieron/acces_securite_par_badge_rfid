@@ -1,4 +1,4 @@
-
-programme_principal/build
-.vscode/settings.json
 programme_principal/prj.conf
+programme_principal/build
+programme_extra/DESFire_init_and_test/build
+.vscode/settings.json

@@ -1,0 +1,35 @@
+/*
+ * Copyright (c) 2024 Johann Gilliéron
+ * SPDX-License-Identifier: Apache-2.0
+ */
+ / {
+    chosen {
+        zephyr,display = &ssd16xx;
+    };
+};
+
+&spi3 {
+    status = "okay";
+    cs-gpios = <&gpio0 27 GPIO_ACTIVE_LOW>, <&gpio1 5 GPIO_ACTIVE_LOW>; //, <&gpio0 3 GPIO_ACTIVE_LOW>
+
+    ssd16xx: ssd1680@0 {
+        compatible = "solomon,ssd1680";
+        spi-max-frequency = <8000000>;
+        status = "okay";
+        reg = <0>;
+        width = <250>;
+        height = <132>;
+        dc-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+        reset-gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
+        busy-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+        zephyr,pm-device-runtime-auto;
+    };
+
+    clrc663_0: nfc@1 {
+        compatible = "nxp,clrc663";
+        status = "okay";
+		reg = <1>;
+        shutdown-gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;
+        spi-max-frequency = <10000000>;
+    };
+};

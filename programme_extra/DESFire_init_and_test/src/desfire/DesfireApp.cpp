@@ -3,7 +3,6 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(DesfireApp, LOG_LEVEL_INF);
 #include <stdint.h>
-#include <zephyr/drivers/nfc.h>
 
 #include "Utils.h"
 #include "Buffer.h"
@@ -11,7 +10,6 @@ LOG_MODULE_REGISTER(DesfireApp, LOG_LEVEL_INF);
 #include "desfire.h"
 
 #define USE_DESFIRE true
-#define DEBUG_DESFIRE true
 
 #if USE_DESFIRE
     // This compiler switch defines if you use AES (128 bit) or DES (168 bit) for the PICC master key and the application master key.
@@ -56,12 +54,12 @@ static struct kCard k_Card;
 
 // prototypes
 extern "C" {
-bool read_nfc_card(uint8_t UID[10], uint8_t *UID_length, uint8_t *SAK, uint8_t ATQA[2], uint8_t ATS[32], uint8_t *ATS_length);
+bool read_nfc_card(uint8_t *UID, uint8_t *UID_length, uint8_t *SAK, uint8_t *ATQA, uint8_t *ATS, uint8_t *ATS_length);
 bool AuthenticatePICC(uint8_t* pu8_KeyVersion);
-bool GenerateDesfireSecrets(struct kCard* pk_Card, DESFireKey* pi_AppMasterKey, uint8_t u8_StoreValue[8]);
-bool CheckDesfireSecret(struct kCard* pk_Card, uint8_t u8_StoreValue[8]);
+bool GenerateDesfireSecrets(struct kCard* pk_Card, DESFireKey* pi_AppMasterKey, uint8_t u8_StoreValue[16]);
+bool CheckDesfireSecret(struct kCard* pk_Card, char* secret);
 bool ChangePiccMasterKey(struct kCard k_Card);
-bool StoreDesfireSecret(struct kCard* pk_Card);
+bool StoreDesfireSecret(struct kCard* pk_Card, char* secret);
 bool RestoreDesfireCard(struct kCard k_Card);
 void print_get_version(DESFireCardVersion *version);
 
@@ -73,69 +71,53 @@ bool init_defireApp() {
     return true;
 }
 
-bool read_nfc_card(uint8_t UID[10], uint8_t *UID_length, uint8_t *SAK, uint8_t ATQA[2], uint8_t ATS[32], uint8_t *ATS_length) {
+bool read_nfc_card(uint8_t *UID, uint8_t *UID_length, uint8_t *SAK, uint8_t *ATQA, uint8_t *ATS, uint8_t *ATS_length) {
     // Read the card
     k_Card = {0};
     uint8_t ats_length;
     bool nfc_com_status;
     k_Card.u8_UidLength = nfc_card_select(clrc663, k_Card.u8_UID, &k_Card.u8_SAK, k_Card.u8_ATQA, k_Card.u8_ATS);
-    
+    // Copy the data to the output parameters
     *UID_length = k_Card.u8_UidLength;
+    bytecpy(UID, k_Card.u8_UID, k_Card.u8_UidLength);
+    *SAK = k_Card.u8_SAK;
+    bytecpy(ATQA, k_Card.u8_ATQA, 2);
+    ats_length = k_Card.u8_ATS[0];
+    *ATS_length = ats_length;
+    k_Card.e_CardType = CARD_Unknown;
+    k_Card.u8_KeyVersion = 0x00;
 
-    if (k_Card.u8_UidLength == 0) 
-    {
+    if (k_Card.u8_UidLength == 0) {
         LOG_DBG("No card detected");
         return false;
-    }
-    else
-    {
-        bytecpy(UID, k_Card.u8_UID, k_Card.u8_UidLength);
-        *SAK = k_Card.u8_SAK;
-        bytecpy(ATQA, k_Card.u8_ATQA, 2);
-        ats_length = k_Card.u8_ATS[0];
-        *ATS_length = ats_length;
-        k_Card.e_CardType = CARD_Unknown;
-        k_Card.u8_KeyVersion = 0x00;
+    } else {
         k_Card.e_CardType = CARD_CLASSIC;
-
-        if (ats_length > 0) 
-        {
+        if (ats_length > 0) {
             bytecpy(ATS, k_Card.u8_ATS+1, ats_length);
             nfc_com_status = gi_CLRC663.GetCardVersion(&k_Card.u8_Version);
-
-            if(!nfc_com_status) 
-            {
+            if(!nfc_com_status) {
                 LOG_DBG("No data received from card get version command");
-            } 
-            else 
-            {
-                k_Card.e_CardType = CARD_Desfire;
-#if DEBUG_DESFIRE
+            } else {
                 LOG_HEXDUMP_DBG(&k_Card.u8_Version, 28, "Version: ");
+                k_Card.e_CardType = CARD_Desfire;
                 print_get_version(&k_Card.u8_Version);
                 uint32_t u32_IDlist[28];
                 uint8_t     u8_AppCount;
                 nfc_com_status = gi_CLRC663.GetApplicationIDs(u32_IDlist, &u8_AppCount);
-                if(!nfc_com_status) 
-                {
+                if(!nfc_com_status) {
                     LOG_INF("No data received from card get application IDs command");
-                } 
-                else 
-                {
+                } else {
                     LOG_INF("Application count: %d", u8_AppCount);
-                    for (uint8_t i = 0; i < u8_AppCount; i++) 
-                    {
+                    for (uint8_t i = 0; i < u8_AppCount; i++) {
                         LOG_INF("Application ID: %x", u32_IDlist[i]);
                     }
                 }
-#endif
             }
-        } 
-        else 
-        {
+        } else {
             LOG_WRN("No ATS : NFC tag not compliant with ISO14443-4");
         }
     }
+
     return true;
 }
 
@@ -167,67 +149,31 @@ bool AuthenticatePICC(uint8_t* pu8_KeyVersion)
     return true;
 }
 
-bool init_card() {
-    // First delete the application (The current application master key may have changed after changing the user name for that card)
-
+bool init_card(char* secret) {
     if (k_Card.e_CardType == CARD_Desfire) {
-        if (!(gi_CLRC663.SelectApplication(CARD_APPLICATION_ID))){ // PICC level
+        if(!gi_CLRC663.SelectApplication(CARD_APPLICATION_ID)){
+            // PICC level
             LOG_INF("Failed to select application(0x%x)", CARD_APPLICATION_ID);
-            if(!StoreDesfireSecret(&k_Card)) {
+            if(!StoreDesfireSecret(&k_Card, secret)) {
                 LOG_ERR("Failed to store secret on card");
                 return false;
             }
         } else {
             LOG_ERR("Card application is already initialized");
-            return true;
-        }
-    }
-    return true;
-}
-
-bool read_card_secret(uint8_t *secret)
-{
-    uint8_t u8_FileData[8];
-    uint8_t u8_ats_length;
-    k_Card = {0};
-    bool nfc_com_status;
-    k_Card.u8_UidLength = nfc_card_select(clrc663, k_Card.u8_UID, &k_Card.u8_SAK, k_Card.u8_ATQA, k_Card.u8_ATS);
-
-    if (k_Card.u8_UidLength == 0) 
-    {
-        k_Card.e_CardType = CARD_Unknown;
-        LOG_DBG("No card detected");
-        return false;
-    }
-    else
-    {
-        k_Card.u8_KeyVersion = 0x00;
-        k_Card.e_CardType = CARD_CLASSIC;
-        u8_ats_length = k_Card.u8_ATS[0];
-        if (u8_ats_length > 0)
-        {
-            k_Card.e_CardType = CARD_Desfire;
-            nfc_com_status = gi_CLRC663.GetCardVersion(&k_Card.u8_Version);
-            if (k_Card.e_CardType == CARD_Desfire) {
-                if (!CheckDesfireSecret(&k_Card, u8_FileData)) {
-                    LOG_ERR("Failed to check secret on card");
-                    return false;
-                }
-            }
-        } else {
-            LOG_ERR("Card is not a Desfire card");
+            CheckDesfireSecret(&k_Card, secret);
             return false;
         }
+    } else {
+        LOG_ERR("Card is not a Desfire card");
+        return false;
     }
-    bytecpy(secret, u8_FileData, 8); // Copy the secret to the output parameter
     return true;
-
 }
 
 // Generate two dynamic secrets: the Application master key (AES 16 uint8_t or DES 24 uint8_t) and the 8 uint8_t StoreValue.
 // Both are derived from the 7 uint8_t card UID and the the user name + random data stored in EEPROM using two 24 uint8_t 3K3DES keys.
 // This function takes only 6 milliseconds to do the cryptographic calculations.
-bool GenerateDesfireSecrets(struct kCard* pk_Card, DESFireKey* pi_AppMasterKey, uint8_t u8_StoreValue[8])
+bool GenerateDesfireSecrets(struct kCard* pk_Card, DESFireKey* pi_AppMasterKey, uint8_t u8_StoreValue[16])
 {
     // The buffer is initialized to zero here
     uint8_t u8_Data[24] = {0}; 
@@ -252,26 +198,26 @@ bool GenerateDesfireSecrets(struct kCard* pk_Card, DESFireKey* pi_AppMasterKey, 
 
     if (!i_3KDes.SetKeyData(SECRET_STORE_VALUE_KEY, sizeof(SECRET_STORE_VALUE_KEY), 0) || // set a 24 uint8_t key (168 bit)
         !i_3KDes.CryptDataCBC(CBC_SEND, KEY_ENCIPHER, u8_StoreValue, u8_Data, 8)) {
-        LOG_ERR("Failed to encrypt data for store value 8");
+        LOG_ERR("Failed to encrypt data for store value 16");
         return false;
     }
-    LOG_HEXDUMP_INF(u8_StoreValue, 8, "secret: ");
 
     // If the key is an AES key only the first 16 uint8_ts will be used
     if (!pi_AppMasterKey->SetKeyData(u8_AppMasterKey, sizeof(u8_AppMasterKey), CARD_KEY_VERSION)) {
         LOG_ERR("Failed to set application key");
         return false;
-    }
+}
     return true;
 }
 
 // Check that the data stored on the card is the same as the secret generated by GenerateDesfireSecrets()
-bool CheckDesfireSecret(struct kCard* pk_Card, uint8_t *out_Value)
+bool CheckDesfireSecret(struct kCard* pk_Card, char* secret)
 {
-    uint8_t u8_StoreValue[8];
     DESFIRE_KEY_TYPE i_AppMasterKey;
+    uint8_t u8_StoreValue[8];
     if (!GenerateDesfireSecrets(pk_Card, &i_AppMasterKey, u8_StoreValue))
         return false;
+    bytecpy(secret, u8_StoreValue, 8); // Copy the secret to the output parameter
 
     if (!gi_CLRC663.SelectApplication(0x000000)) // PICC level
         return false;
@@ -281,8 +227,8 @@ bool CheckDesfireSecret(struct kCard* pk_Card, uint8_t *out_Value)
         return false;
 
     // The factory default key has version 0, while a personalized card has key version CARD_KEY_VERSION
-    //if (u8_Version != CARD_KEY_VERSION)
-    //    return false;
+    if (u8_Version != CARD_KEY_VERSION)
+        return false;
 
     if (!gi_CLRC663.SelectApplication(CARD_APPLICATION_ID))
         return false;
@@ -298,9 +244,6 @@ bool CheckDesfireSecret(struct kCard* pk_Card, uint8_t *out_Value)
     if (memcmp(u8_FileData, u8_StoreValue, 8) != 0)
         return false;
 
-    LOG_INF("Secret on card is correct");
-
-    bytecpy(out_Value, u8_StoreValue, 8);
     return true;
 }
 
@@ -328,7 +271,7 @@ bool ChangePiccMasterKey(struct kCard k_Card)
 // store the dynamic Application master key in the application,
 // create a StandardDataFile SECRET_FILE_ID and store the dynamic 16 uint8_t value into that file.
 // This function requires previous authentication with PICC master key.
-bool StoreDesfireSecret(struct kCard* pk_Card)
+bool StoreDesfireSecret(struct kCard* pk_Card, char* secret)
 {
     if (CARD_APPLICATION_ID == 0x000000 || CARD_KEY_VERSION == 0){
         LOG_ERR("Invalid values in Secrets.h");
@@ -341,6 +284,7 @@ bool StoreDesfireSecret(struct kCard* pk_Card)
         LOG_ERR("Failed to generate secrets");
         return false;
     }
+    bytecpy(secret, u8_StoreValue, 8); // Copy the secret to the output parameter
     // First delete the application (The current application master key may have changed after changing the user name for that card)
     if (!gi_CLRC663.DeleteApplicationIfExists(CARD_APPLICATION_ID)){
         LOG_ERR("Failed to delete application");
