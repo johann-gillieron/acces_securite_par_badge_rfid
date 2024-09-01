@@ -10,7 +10,7 @@ import csv
 import mariadb
 
 # define the global constants
-logs_folder = "siteweb_bachelor/logs/"
+logs_folder = "siteweb/logs/"
 DEBUG_LVL0 = False # Debug level 0: critical information
 DEBUG_LVL1 = True # Debug level 1: information
 DEBUG_LVL2 = True # Debug level 2: debug information
