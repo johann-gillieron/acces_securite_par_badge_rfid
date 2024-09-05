@@ -20,8 +20,8 @@
         width = <250>;
         height = <134>;
         dc-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
-        reset-gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
-        busy-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+        reset-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+        busy-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
         zephyr,pm-device-runtime-auto;
     };
 

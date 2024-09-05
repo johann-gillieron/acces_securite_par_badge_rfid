@@ -18,10 +18,10 @@
         status = "okay";
         reg = <0>;
         width = <250>;
-        height = <132>;
+        height = <134>;
         dc-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
-        reset-gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;
-        busy-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+        reset-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
+        busy-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
         zephyr,pm-device-runtime-auto;
     };
 
@@ -29,7 +29,7 @@
         compatible = "nxp,clrc663";
         status = "okay";
 		reg = <1>;
-        shutdown-gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;
+        shutdown-gpios = <&gpio1 4 GPIO_ACTIVE_LOW>;
         spi-max-frequency = <10000000>;
     };
 };
