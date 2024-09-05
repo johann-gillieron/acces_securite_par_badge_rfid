@@ -25,6 +25,8 @@ LOG_MODULE_REGISTER(userInterface, LOG_LEVEL_INF);
 extern const struct device *clrc663;
 extern const struct device *display_dev;
 
+#define relay_inverted True
+
 
 /*********************************
  * 		Thread Configuration 	 *
@@ -570,7 +572,11 @@ void userInterface_thread(void)
         switch(actual_state) {
             case USER_INTERFACE_SLEEP:
                 LOG_INF("USER_INTERFACE_SLEEP");
-                gpio_pin_set_dt(&led, false); // Turn off the device
+#if relay_inverted
+                gpio_pin_set_dt(&led, true); // Turn off the device
+#else
+                gpio_pin_set_dt(&led, false); // Turn on the device
+#endif
                 if (flag_btn) {
                     actual_state = USER_INTERFACE_AUTHENTICATION;
                     flag_btn = false;
@@ -596,7 +602,12 @@ void userInterface_thread(void)
             case USER_INTERFACE_ACCESS_GRANTED:
                 LOG_INF("USER_INTERFACE_ACCESS_GRANTED");
                 //add_new_log(&local_session_context, USER_INTERFACE_ACCESS_GRANTED);
+                                
+#if relay_inverted
+                gpio_pin_set_dt(&led, false); // Turn on the device
+#else
                 gpio_pin_set_dt(&led, true); // Turn on the device
+#endif
                 actual_state = USER_INTERFACE_SESSION_ACTIF;
                 if (technical_user) {
                     time_remaining = TIME_MAX_SESSION * 1000 + 1;
@@ -703,7 +714,12 @@ void userInterface_thread(void)
 
             case USER_INTERFACE_SESSION_END:
                 //add_new_log(&local_session_context, USER_INTERFACE_SESSION_END);
+                
+#if relay_inverted
+                gpio_pin_set_dt(&led, true); // Turn off the device
+#else
                 gpio_pin_set_dt(&led, false); // Turn off the device
+#endif
                 actual_state = USER_INTERFACE_SLEEP;
                 LOG_INF("USER_INTERFACE_SESSION_END");
                 time_remaining = 0;

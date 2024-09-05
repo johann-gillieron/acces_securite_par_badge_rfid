@@ -501,6 +501,10 @@ server_connect:
 						goto wifi_begin;
 					}
 				}
+				else
+				{
+					LOG_INF("TWT already enabled\n");
+				}
 #endif /* TWT_USE */
 			}
 

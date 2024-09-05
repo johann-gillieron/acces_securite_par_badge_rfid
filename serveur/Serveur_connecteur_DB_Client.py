@@ -11,6 +11,7 @@ import mariadb
 
 # define the global constants
 logs_folder = "siteweb/logs/"
+device_database = "siteweb/device.csv"
 DEBUG_LVL0 = False # Debug level 0: critical information
 DEBUG_LVL1 = True # Debug level 1: information
 DEBUG_LVL2 = True # Debug level 2: debug information
@@ -29,6 +30,7 @@ USER_NAME_MAX_SIZE = 36
 PHONE_NUMBER_MAX_SIZE = 16
 BYTES_FOR_DESFIRE_ID = 8
 header_logs_csv = ["Time", "UserID", "Type"]
+nb_device = 1 # Number of device to manage
 
 config_mariadb = {
     'user': 'myuser',
@@ -38,6 +40,8 @@ config_mariadb = {
 }
 
 # Define the user data to send to the device
+Device_infos = []
+Actual_user = []
 New_Users = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []] # 3D array
 Removed_User = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []] # 3D array
 
@@ -86,7 +90,7 @@ class TCP_DATA_TYPE:
 def connect_to_db():
     return mariadb.connect(**config_mariadb)
 
-def get_users_by_machine(cursor):
+def get_users_by_row(cursor):
     query = """
     SELECT id, user_id, first_name, last_name, phone, secret, technician, machine_1, machine_2
     FROM users
@@ -124,26 +128,155 @@ def UserData(user_id, user_first_name, user_name, phone_number, desfire_id, user
         byte_array[len(byte_array):] = local_desfire_id
         return byte_array
 
+def load_client_info():
+    #test if the file devices.csv exists else create it with the header
+    try:
+        with open(device_database, "r") as f:
+            reader = csv.reader(f)
+            # load the data from the file
+            for row in reader:
+                if row[0] == "Device ID":
+                    continue
+                Device_infos.append(row[0:5])
+                print(f"Device ID: {Device_infos[-1][0]}, Device type: {Device_infos[-1][1]}, Device status: {Device_infos[-1][2]}, Device major version: {Device_infos[-1][3]}, Device minor version: {Device_infos[-1][4]}")
+                Actual_user.append(row[5:])
+                print(f"Users: {Actual_user}")
+    except FileNotFoundError:
+        with open(device_database, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Device ID", "Device type", "Device status", "Device major version", "Device minor version"])
+
+def modify_user_in_device_csv(device_id, user_id, desfire_id):
+    # Modify the user in the device csv file
+    with open(device_database, "r") as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+    with open(device_database, "w", newline="") as f:
+        writer = csv.writer(f)
+        for row in rows:
+            if row[0] == "Device ID":
+                writer.writerow(row)
+                continue
+            if row[0] == device_id:
+                for user in Actual_user[device_id]:
+                    if user[0] == user_id:
+                        user[1] = desfire_id
+                    # find the index of the actual user
+
+                    # add 1 and change the desfire id
+                    
+                row[5:] = Actual_user[device_id]
+            writer.writerow(row)
+
+def add_user_in_device_csv(device_id, user_id, desfire_id):
+    # Add the user in the device csv file
+    with open(device_database, "r") as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+    with open(device_database, "w", newline="") as f:
+        writer = csv.writer(f)
+        for row in rows:
+            print(f"add Row: {row}")
+            if row[0] == "Device ID":
+                writer.writerow(row)
+                continue
+            if int(row[0]) == device_id:
+                Actual_user[device_id].append(user_id)
+                Actual_user[device_id].append(desfire_id)
+                row[5:] = Actual_user[device_id]
+            writer.writerow(row)
+
+def remove_user_in_device_csv(device_id, user_id, desfire_id):
+    # Remove the user in the device csv file
+    with open(device_database, "r") as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+    with open(device_database, "w", newline="") as f:
+        writer = csv.writer(f)
+        for row in rows:
+            if row[0] == "Device ID":
+                writer.writerow(row)
+                continue
+            if int(row[0]) == device_id:
+                for user in Actual_user[device_id]:
+                    if int(user[0]) == user_id:
+                        Actual_user[device_id].remove(user_id)
+                        Actual_user[device_id].remove(desfire_id)
+                row[5:] = Actual_user[device_id]
+            writer.writerow(row)
+
+
 
 def DataBaseUserManagement():
-    users_in_db = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
-    actual_users = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
-    db = connect_to_db()
-    cursor = db.cursor()
-    users = get_users_by_machine(cursor)
-    for user in users:
-        user_id = struct.unpack('<H', user[1][0:2].encode('utf-8'))[0]
-        defire_str = user[5].replace(":", "")
-        defire_id = bytes.fromhex(defire_str)
-        type(user_id)
-        if user[7]:  # machine_1 column
-            print(f"User ID: {user[1]}, User ID: {bytearray((user[1][0:2]).encode('utf-8'))}, Name: {user[2]} {user[3]}, Phone: {user[4]}, Desfire ID: {user[5]}")
-            New_Users[0].append(UserData(user_id, user[2], user[3], user[4], defire_id, user[6]))
-        if user[8]:  # machine_2 column
-            New_Users[1].append(UserData(user_id, user[2], user[3], user[4], defire_id, user[6]))
-            
-    cursor.close()
-    db.close()
+    
+    users_in_db_actu = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
+    users_in_db_prev = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
+    users_to_remove = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
+    users_to_add = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
+
+    while True:
+        db = connect_to_db()
+        cursor = db.cursor()
+        users = get_users_by_row(cursor)
+        cursor.close()
+        db.close()
+
+        for user in users:
+            user_id = struct.unpack('<H', user[1][0:2].encode('utf-8'))[0]
+            defire_str = user[5].replace(":", "")
+            defire_id = bytes.fromhex(defire_str)
+            type(user_id)
+            if user[7]:  # machine_1 column
+                print(f"User ID: {user[1]}, User ID: {bytearray((user[1][0:2]).encode('utf-8'))}, Name: {user[2]} {user[3]}, Phone: {user[4]}, Desfire ID: {user[5]}")
+                users_in_db_actu[0].append(UserData(user_id, user[2], user[3], user[4], defire_id, user[6]))
+            if user[8]:  # machine_2 column
+                users_in_db_actu[1].append(UserData(user_id, user[2], user[3], user[4], defire_id, user[6]))
+
+        for i in range(nb_device):
+            # Check if a user has been deleted form the database but not in the device
+            for user in users_in_db_prev[i]:
+                user_id = struct.unpack('<H', user[0:2])[0]
+                if user not in users_in_db_actu[i] and str(user_id) in Actual_user[i]:
+                    if user[0:2] not in Removed_User[i] and user[0:2] not in users_to_remove[i]:
+                        print(f"User ID: {user[0:2]} has been removed in the database")
+                        Removed_User[i].append(user[0:2])
+                        users_to_remove[i].append(user[0:2])
+    
+            # Check if a user has been deleted form the device but not in the database
+            for user in users_to_remove[i]:
+                if user not in Removed_User[i]:
+                    user_id = struct.unpack('<H', user[0:2])[0]
+                    desfire_id = user[-8:]
+                    print(f"User ID: {user_id}, Desfire ID: {desfire_id} has been removed in the device")
+                    remove_user_in_device_csv(i, user_id, desfire_id)
+                    users_to_remove[i].remove(user)
+
+
+            # Check if a user has been added in the database but not in the device
+            for user in users_in_db_actu[i]:
+                if user not in users_in_db_prev[i]:
+                    user_id = struct.unpack('<H', user[0:2])[0]
+                    if str(user_id) not in Actual_user[i]:
+                        if user not in New_Users[i] and user not in users_to_add[i]:
+                            print(f"User ID: {user[0:2]} has been added in the database")
+                            New_Users[i].append(user)
+                            users_to_add[i].append(user)
+
+            # Check if a user has been added in the device but not in the database
+            for user in users_to_add[i]:
+                if user not in New_Users[i]:
+                    user_id = struct.unpack('<H', user[0:2])[0]
+                    desfire_id = user[-8:]
+                    print(f"User ID: {user_id}, Desfire ID: {desfire_id}")
+                    print(f"User ID: {user_id} has been added in the device")
+                    add_user_in_device_csv(i,user_id, desfire_id)
+                    users_to_add[i].remove(user)
+
+        # Save the previous data
+        for i in range(nb_device):
+            users_in_db_prev[i] = users_in_db_actu[i]
+
+        time.sleep(20) # 20 seconds actualisation
 
 # Define a function to compute the logs receive from the device out : (user id, date, time, action)
 def logs_buffer_compute(buffer_logs, logs_size, device_id):
@@ -465,7 +598,9 @@ def handle_client(client_connection, client_address):
 
 def main():
     try:
-        DataBaseUserManagement()
+        load_client_info()
+        db_thread = threading.Thread(target=DataBaseUserManagement)
+        db_thread.start()
         while True:
             client_connection, client_address = server_socket.accept()
             thread = threading.Thread(target=handle_client, args=(client_connection, client_address))
