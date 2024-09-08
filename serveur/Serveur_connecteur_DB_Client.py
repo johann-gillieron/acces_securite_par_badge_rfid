@@ -129,6 +129,7 @@ def UserData(user_id, user_first_name, user_name, phone_number, desfire_id, user
         return byte_array
 
 def load_client_info():
+    global nb_device
     #test if the file devices.csv exists else create it with the header
     try:
         with open(device_database, "r") as f:
@@ -209,6 +210,7 @@ def remove_user_in_device_csv(device_id, user_id, desfire_id):
 
 
 def DataBaseUserManagement():
+    global nb_device
     
     users_in_db_actu = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
     users_in_db_prev = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
