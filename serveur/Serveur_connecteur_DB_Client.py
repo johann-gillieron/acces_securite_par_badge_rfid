@@ -29,8 +29,8 @@ MAX_REMOVED_USERS_PER_PACKET = 704 # 704*2 = 1408
 USER_NAME_MAX_SIZE = 36
 PHONE_NUMBER_MAX_SIZE = 16
 BYTES_FOR_DESFIRE_ID = 8
-header_logs_csv = ["Time", "UserID", "Type"]
-nb_device = 1 # Number of device to manage
+header_logs_csv = ["UserID", "Time", "Type"]
+nb_device = 0 # Number of device to manage
 
 config_mariadb = {
     'user': 'myuser',
@@ -41,7 +41,7 @@ config_mariadb = {
 
 # Define the user data to send to the device
 Device_infos = []
-Actual_user = []
+Actual_user = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []]
 New_Users = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []] # 3D array
 Removed_User = [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []] # 3D array
 
@@ -137,6 +137,7 @@ def load_client_info():
             for row in reader:
                 if row[0] == "Device ID":
                     continue
+                nb_device += 1
                 Device_infos.append(row[0:5])
                 print(f"Device ID: {Device_infos[-1][0]}, Device type: {Device_infos[-1][1]}, Device status: {Device_infos[-1][2]}, Device major version: {Device_infos[-1][3]}, Device minor version: {Device_infos[-1][4]}")
                 Actual_user.append(row[5:])
@@ -162,9 +163,9 @@ def modify_user_in_device_csv(device_id, user_id, desfire_id):
                     if user[0] == user_id:
                         user[1] = desfire_id
                     # find the index of the actual user
-
+                    idx = Actual_user[device_id].index(user)
                     # add 1 and change the desfire id
-                    
+                    Actual_user[device_id][idx+1] = desfire_id
                 row[5:] = Actual_user[device_id]
             writer.writerow(row)
 
@@ -347,6 +348,20 @@ def process_client_info(buf, adress):
             print(f"Device status: {device_status}")
             print(f"Device major version: {device_major_version}")
             print(f"Device minor version: {device_minor_version}")
+    
+        # Check if the device exists in the csv file
+        try:
+            for device in Device_infos:
+                if int(device[0]) == device_id:
+                    print (f"Device ID: {device_id} already exists")
+                    return buf
+        except:
+            pass
+        with open(device_database, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(buf)
+            nb_device += 1
+            print(F"New device ID: {device_id} added")
         return buf
         '''
         # Check if the device has an update to download
