@@ -1,7 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, send_file
 import mariadb
 import random
 import string
+import csv
+import datetime, time
+
+logs_folder = 'logs/'
+logs_name = 'logs_device_0.csv'
 
 def generate_user_id():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=2))
@@ -153,6 +158,30 @@ def delete_user(user_id):
     conn.close()
 
     return redirect(url_for('user_management2'))
+
+@app.route('/logs_device_0')
+def display_logs():
+    # Read the CSV file
+    data = []
+    with open(logs_folder +  logs_name, newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            # Convert the timestamp to a human-readable format
+            #row['UserID'] = bytes.fromhex(hex(int(row['UserID'].strip('(),')))[2:]).decode('utf-8')
+            row['UserID'] = int(row['UserID'].strip('(),'))
+            row['Time'] = time.strftime("%D %T", time.gmtime(int(row['Time'].strip('(),'))))
+            print(row['Time'])
+            print(row)
+            data.append(row)
+
+    # Render the template with the data
+    return render_template('logs.html', data=data)
+
+@app.route('/logs_device_0/download')
+def download_csv():
+    # Send the CSV file as a downloadable attachment
+    return send_file(logs_folder + logs_name, as_attachment=True)
+
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0")

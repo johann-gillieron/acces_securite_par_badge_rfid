@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Access User Management</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 15px;
+        }
+        </style>
+</head>
+<body>
+    <nav class="navbar">
+        <ul>
+            <li><a href="user_management">User Management Site</a></li>
+            <li><a href="user_management2">User Management Access</a></li>
+            <li><a href="logs_device_0">Logs for device 0</a></li>
+        </ul>
+    </nav>
+    <h1>Logs of device 0</h1>
+    <a href="/logs_device_0/download" class="btn btn-primary mb-3">Download CSV format</a>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                {% for header in data[0].keys() %}
+                    <th>{{ header }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in data %}
+                <tr>
+                    {% for value in row.values() %}
+                        <td>{{ value }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

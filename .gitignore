@@ -3,5 +3,5 @@ programme_principal/build
 programme_extra/DESFire_init_and_test/build
 .vscode/settings.json
 serveur/siteweb/device.csv
-serveur/siteweb/logs/logs_device_0.csv
-serveur/siteweb/logs/logs_device_0.csv.bak
+serveur/siteweb/logs/*
+serveur/siteweb/ttest.py
